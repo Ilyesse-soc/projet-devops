@@ -1,0 +1,101 @@
+stages:
+  - build
+  - test
+  - docker
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375/
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+
+build-frontend:
+  stage: build
+  script:
+    - cd frontend
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/.next
+
+build-backend-node:
+  stage: build
+  script:
+    - cd backend-node
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - backend-node/dist
+
+build-backend-dotnet:
+  stage: build
+  script:
+    - cd backend-dotnet
+    - dotnet restore
+    - dotnet build --configuration Release
+  artifacts:
+    paths:
+      - backend-dotnet/bin
+
+build-backend-springboot:
+  stage: build
+  script:
+    - cd backend-springboot
+    - ./mvnw clean package -DskipTests
+  artifacts:
+    paths:
+      - backend-springboot/target
+
+test-frontend:
+  stage: test
+  script:
+    - cd frontend
+    - npm run test
+
+test-backend-node:
+  stage: test
+  script:
+    - cd backend-node
+    - npm run test
+
+test-backend-dotnet:
+  stage: test
+  script:
+    - cd backend-dotnet
+    - dotnet test
+
+test-backend-springboot:
+  stage: test
+  script:
+    - cd backend-springboot
+    - ./mvnw test
+
+docker-build-push:
+  stage: docker
+  services:
+    - docker:dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:latest ./frontend
+    - docker build -t $CI_REGISTRY_IMAGE/backend-node:latest ./backend-node
+    - docker build -t $CI_REGISTRY_IMAGE/backend-dotnet:latest ./backend-dotnet
+    - docker build -t $CI_REGISTRY_IMAGE/backend-springboot:latest ./backend-springboot
+    - docker push $CI_REGISTRY_IMAGE/frontend:latest
+    - docker push $CI_REGISTRY_IMAGE/backend-node:latest
+    - docker push $CI_REGISTRY_IMAGE/backend-dotnet:latest
+    - docker push $CI_REGISTRY_IMAGE/backend-springboot:latest
+
+deploy-compose:
+  stage: deploy
+  script:
+    - docker-compose -f infra/docker-compose/docker-compose.dev.yml up -d
+  when: manual
+
+deploy-k8s:
+  stage: deploy
+  script:
+    - kubectl apply -f infra/k8s/
+  when: manual
