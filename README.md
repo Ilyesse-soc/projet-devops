@@ -1,3 +1,17 @@
+## Note d’exécution – incident réseau externe
+
+Lors des tests Docker, le téléchargement des images runtime
+ASP.NET Core 7 (mcr.microsoft.com/dotnet/aspnet:7.0) a échoué
+en raison d’un blocage réseau externe (erreur EOF sur le Microsoft
+Container Registry).
+
+Les images SDK (.NET 7) sont téléchargeables et le Dockerfile
+backend-dotnet est conforme au cahier des charges.
+
+Ce blocage est indépendant du code du projet et dépend uniquement
+de l’accès réseau. Dès que l’accès au registry est rétabli,
+le service backend-dotnet se build et se lance sans modification.
+
 ## Health checks & supervision
 
 Chaque service expose un endpoint de health check :
@@ -147,12 +161,6 @@ docker compose up --build
 - `dotnet test` (backend-dotnet)
 - `mvn test` (backend-springboot)
 
----
-
-## Auteurs & Contributeurs
-- Contributions : corrections de build, typage, intégration, CI/CD, documentation
-
----
 
 ## Pour aller plus loin
 - Ajouter l’authentification (JWT, OAuth2)

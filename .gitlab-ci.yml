@@ -1,17 +1,23 @@
 stages:
   - build
   - test
-  - docker
+  - push
   - deploy
 
 variables:
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: ""
-  DOCKER_HOST: tcp://docker:2375/
-  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  NEXT_PUBLIC_API_URL: http://backend-node:3001
 
-build-frontend:
+########################
+# BUILD STAGE
+########################
+
+build:frontend:
   stage: build
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: node:20
   script:
     - cd frontend
     - npm ci
@@ -19,19 +25,17 @@ build-frontend:
   artifacts:
     paths:
       - frontend/.next
+      - frontend/node_modules
+      - frontend/package.json
+      - frontend/package-lock.json
 
-build-backend-node:
+build:dotnet:
   stage: build
-  script:
-    - cd backend-node
-    - npm ci
-    - npm run build
-  artifacts:
-    paths:
-      - backend-node/dist
-
-build-backend-dotnet:
-  stage: build
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: mcr.microsoft.com/dotnet/sdk:8.0
   script:
     - cd backend-dotnet
     - dotnet restore
@@ -39,45 +43,130 @@ build-backend-dotnet:
   artifacts:
     paths:
       - backend-dotnet/bin
+      - backend-dotnet/obj
 
-build-backend-springboot:
+build:springboot:
   stage: build
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: maven:3.9.6-eclipse-temurin-21
   script:
     - cd backend-springboot
-    - ./mvnw clean package -DskipTests
+    - mvn clean package -DskipTests=false
   artifacts:
     paths:
       - backend-springboot/target
 
-test-frontend:
+########################
+# TEST STAGE
+########################
+
+test:frontend:
   stage: test
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: node:20
   script:
     - cd frontend
-    - npm run test
+    - npm run lint
 
-test-backend-node:
+test:springboot:
   stage: test
-  script:
-    - cd backend-node
-    - npm run test
-
-test-backend-dotnet:
-  stage: test
-  script:
-    - cd backend-dotnet
-    - dotnet test
-
-test-backend-springboot:
-  stage: test
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: maven:3.9.6-eclipse-temurin-21
   script:
     - cd backend-springboot
-    - ./mvnw test
+    - mvn test
 
-docker-build-push:
-  stage: docker
+########################
+# PUSH STAGE
+########################
+
+push:frontend:
+  stage: push
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: docker:24.0.7
   services:
     - docker:dind
   script:
+    - cd frontend
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA .
+    - echo $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+
+push:dotnet:
+  stage: push
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: docker:24.0.7
+  services:
+    - docker:dind
+  script:
+    - cd backend-dotnet
+    - docker build -t $CI_REGISTRY_IMAGE/backend-dotnet:$CI_COMMIT_SHA .
+    - echo $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - docker push $CI_REGISTRY_IMAGE/backend-dotnet:$CI_COMMIT_SHA
+
+push:springboot:
+  stage: push
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: docker:24.0.7
+  services:
+    - docker:dind
+  script:
+    - cd backend-springboot
+    - docker build -t $CI_REGISTRY_IMAGE/backend-springboot:$CI_COMMIT_SHA .
+    - echo $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
+    - docker push $CI_REGISTRY_IMAGE/backend-springboot:$CI_COMMIT_SHA
+
+########################
+# DEPLOY STAGE
+########################
+
+deploy:docker-compose:
+  stage: deploy
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: docker:24.0.7
+  services:
+    - docker:dind
+  script:
+    - cd infra/docker-compose
+    - docker compose -f docker-compose.dev.yml up -d
+  when: manual
+  environment:
+    name: production
+
+deploy:minikube:
+  stage: deploy
+  tags:
+    - linux
+    - docker
+    - efrei_project
+  image: bitnami/kubectl:latest
+  script:
+    - cd infra/k8s
+    - kubectl apply -f .
+  when: manual
+  environment:
+    name: minikube
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $CI_REGISTRY_IMAGE/frontend:latest ./frontend
     - docker build -t $CI_REGISTRY_IMAGE/backend-node:latest ./backend-node

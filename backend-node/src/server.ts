@@ -1,8 +1,9 @@
 import app from './app';
 import logger from './config/logger';
 
-const port = process.env.PORT || 3001;
+const port = Number(process.env.PORT) || 3001;
+const host = '0.0.0.0';
 
-app.listen(port, () => {
-  logger.info(`Serveur Node.js démarré sur le port ${port}`);
+app.listen(port, host, () => {
+  logger.info(`Serveur Node.js démarré sur le port ${port} (host: ${host})`);
 });

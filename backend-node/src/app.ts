@@ -8,10 +8,12 @@ import studentsRouter from './routes/students.routes';
 
 dotenv.config();
 
-const app = express();
 
-app.use(cors());
+
+const app = express();
+app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/students', studentsRouter);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));

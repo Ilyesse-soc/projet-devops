@@ -24,8 +24,17 @@ export const getStudentById = async (req: Request, res: Response, next: NextFunc
 export const createStudent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { firstName, lastName, email, phone, enrollmentDate } = req.body;
+    // Validation manuelle des champs obligatoires
+    if (!firstName || !lastName || !email || !phone || !enrollmentDate) {
+      return res.status(400).json({ error: 'Tous les champs sont obligatoires (prénom, nom, email, téléphone, date inscription).' });
+    }
+    // Conversion de la date
+    const dateObj = new Date(enrollmentDate);
+    if (isNaN(dateObj.getTime())) {
+      return res.status(400).json({ error: 'Format de date d\'inscription invalide.' });
+    }
     const student = await prisma.student.create({
-      data: { firstName, lastName, email, phone, enrollmentDate: new Date(enrollmentDate) }
+      data: { firstName, lastName, email, phone, enrollmentDate: dateObj }
     });
     res.status(201).json(student);
   } catch (err) {
